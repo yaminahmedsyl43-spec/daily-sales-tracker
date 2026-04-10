@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Daily Sales Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f7f6f2;
+    --surface: #ffffff;
+    --surface2: #f0efe9;
+    --border: #e2e0d8;
+    --border2: #ccc9be;
+    --text: #1c1b18;
+    --muted: #7a7870;
+    --accent: #d4522a;
+    --accent-light: #fdf0eb;
+    --accent-dark: #a83d1e;
+    --green: #2a7a4b;
+    --green-bg: #edf7f1;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  html { font-size: 15px; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  /* Layout */
+  .shell { max-width: 1100px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+
+  /* Header */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.25rem 0 1rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-icon {
+    width: 36px; height: 36px; background: var(--accent); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-icon svg { width: 20px; height: 20px; fill: white; }
+  .brand-name { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.02em; }
+  .brand-sub { font-size: 0.78rem; color: var(--muted); font-family: var(--mono); }
+  .today-chip {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
+    background: var(--surface2); padding: 5px 10px; border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 3px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 4px; margin-bottom: 1.5rem; width: fit-content;
+  }
+  .tab {
+    padding: 7px 18px; border-radius: var(--radius-sm); border: none;
+    background: transparent; cursor: pointer; font-size: 0.87rem;
+    color: var(--muted); font-family: var(--sans); font-weight: 500;
+    transition: all 0.14s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  /* Section */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* Controls bar */
+  .controls {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 1.25rem; flex-wrap: wrap;
+  }
+  .week-nav { display: flex; align-items: center; gap: 6px; }
+  .nav-btn {
+    width: 30px; height: 30px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--surface);
+    cursor: pointer; font-size: 1rem; color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.12s;
+  }
+  .nav-btn:hover { border-color: var(--border2); color: var(--text); }
+  .week-label {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 500;
+    color: var(--text); min-width: 170px; text-align: center;
+  }
+  .ctrl-input {
+    padding: 6px 10px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); font-size: 0.83rem; font-family: var(--sans);
+  }
+  .ctrl-input:focus { outline: none; border-color: var(--accent); }
+  .btn-save {
+    padding: 7px 16px; background: var(--accent); color: white;
+    border: none; border-radius: var(--radius-sm); cursor: pointer;
+    font-size: 0.85rem; font-family: var(--sans); font-weight: 500;
+    transition: all 0.12s;
+  }
+  .btn-save:hover { background: var(--accent-dark); }
+  .save-ok { background: var(--green) !important; }
+
+  /* Summary metrics */
+  .metrics {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px; margin-bottom: 1.25rem;
+  }
+  .metric {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px;
+  }
+  .metric.accent-metric { background: var(--accent-light); border-color: #f0c4b0; }
+  .metric-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .metric-val { font-family: var(--mono); font-size: 1.1rem; font-weight: 500; color: var(--text); }
+  .metric.accent-metric .metric-val { color: var(--accent); }
+
+  /* Table */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface);
+  }
+  table { width: 100%; border-collapse: collapse; min-width: 740px; }
+  thead th {
+    padding: 9px 10px; text-align: right; font-size: 0.75rem;
+    font-weight: 500; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.04em; background: var(--surface2);
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  thead th:first-child { text-align: left; }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--bg); }
+  tbody tr.today-row { background: var(--accent-light); }
+  tbody tr.today-row:hover { background: #fce8df; }
+  td { padding: 7px 10px; }
+  .day-col { min-width: 80px; }
+  .day-name { font-weight: 600; font-size: 0.88rem; }
+  .day-date { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); }
+  .today-tag {
+    display: inline-block; font-size: 0.62rem; background: var(--accent);
+    color: white; padding: 1px 5px; border-radius: 3px; margin-left: 5px;
+    vertical-align: middle; font-weight: 500;
+  }
+  .cell-input {
+    width: 72px; padding: 4px 6px; border-radius: 4px;
+    border: 1px solid transparent; background: transparent;
+    color: var(--text); font-size: 0.83rem; font-family: var(--mono);
+    text-align: right; transition: all 0.12s;
+  }
+  .cell-input:hover { border-color: var(--border); background: var(--bg); }
+  .cell-input:focus { border-color: var(--accent); background: white; outline: none; }
+  .row-total {
+    font-family: var(--mono); font-size: 0.88rem; font-weight: 500;
+    color: var(--accent); text-align: right; padding-right: 14px;
+  }
+  tfoot tr { border-top: 2px solid var(--border); background: var(--surface2); }
+  tfoot td { padding: 9px 10px; font-family: var(--mono); font-size: 0.82rem; font-weight: 500; text-align: right; }
+  tfoot td:first-child { text-align: left; color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  tfoot .grand-total { color: var(--accent); font-size: 0.92rem; padding-right: 14px; }
+
+  /* Scanner */
+  .scan-zone {
+    border: 2px dashed var(--border2); border-radius: var(--radius);
+    padding: 2.5rem; text-align: center; cursor: pointer;
+    background: var(--surface); transition: all 0.15s;
+  }
+  .scan-zone:hover { border-color: var(--accent); background: var(--accent-light); }
+  .scan-icon { font-size: 2.2rem; margin-bottom: 0.5rem; }
+  .scan-zone h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; }
+  .scan-zone p { font-size: 0.83rem; color: var(--muted); }
+  #file-inp { display: none; }
+
+  .ocr-progress {
+    margin-top: 1.25rem; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem;
+  }
+  .progress-bar-wrap {
+    height: 6px; background: var(--surface2); border-radius: 3px;
+    overflow: hidden; margin: 0.6rem 0;
+  }
+  .progress-bar-fill {
+    height: 100%; background: var(--accent); border-radius: 3px;
+    transition: width 0.3s ease; width: 0%;
+  }
+  .progress-label { font-size: 0.8rem; color: var(--muted); }
+
+  .scan-preview { max-height: 220px; border-radius: 8px; border: 1px solid var(--border); display: block; margin: 1rem auto; }
+
+  .scan-result {
+    margin-top: 1.25rem; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  }
+  .scan-result-head {
+    padding: 0.85rem 1.25rem; background: var(--surface2);
+    border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.9rem;
+  }
+  .scan-row-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 9px 1.25rem; border-bottom: 1px solid var(--border);
+  }
+  .scan-row-item:last-child { border-bottom: none; }
+  .scan-row-label { font-size: 0.85rem; color: var(--muted); }
+  .scan-row-val { font-family: var(--mono); font-size: 0.9rem; font-weight: 500; }
+  .scan-row-edit { width: 90px; font-family: var(--mono); font-size: 0.85rem; padding: 4px 7px; border: 1px solid var(--border); border-radius: 4px; text-align: right; }
+  .scan-row-edit:focus { outline: none; border-color: var(--accent); }
+  .scan-total-row { background: var(--accent-light); }
+  .scan-total-row .scan-row-label { font-weight: 600; color: var(--text); }
+  .scan-total-row .scan-row-val { color: var(--accent); font-size: 1rem; }
+
+  .scan-actions { display: flex; gap: 8px; padding: 1rem 1.25rem; border-top: 1px solid var(--border); }
+  .btn-apply {
+    flex: 1; padding: 10px; background: var(--accent); color: white;
+    border: none; border-radius: var(--radius-sm); cursor: pointer;
+    font-size: 0.88rem; font-family: var(--sans); font-weight: 600;
+  }
+  .btn-apply:hover { background: var(--accent-dark); }
+  .btn-clear {
+    padding: 10px 16px; background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 0.85rem; font-family: var(--sans);
+  }
+  .btn-clear:hover { border-color: var(--border2); color: var(--text); }
+
+  .raw-text-toggle {
+    font-size: 0.75rem; color: var(--muted); cursor: pointer;
+    text-decoration: underline; text-align: center; margin-top: 0.5rem; display: block;
+  }
+  .raw-text {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 0.8rem 1rem;
+    font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
+    white-space: pre-wrap; margin-top: 0.5rem; max-height: 200px; overflow-y: auto;
+    display: none;
+  }
+
+  /* History */
+  .history-empty { text-align: center; padding: 4rem 2rem; color: var(--muted); font-size: 0.88rem; }
+  .hist-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+    margin-bottom: 10px; cursor: pointer; transition: all 0.14s;
+  }
+  .hist-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(212,82,42,0.08); }
+  .hist-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .hist-week { font-weight: 600; font-size: 0.9rem; }
+  .hist-total { font-family: var(--mono); font-size: 1rem; font-weight: 500; color: var(--accent); }
+  .hist-bars { display: flex; gap: 3px; align-items: flex-end; height: 32px; margin-bottom: 6px; }
+  .hist-bar { flex: 1; background: var(--surface2); border-radius: 2px 2px 0 0; min-height: 3px; position: relative; overflow: hidden; }
+  .hist-bar-fill { background: var(--accent); border-radius: 2px 2px 0 0; position: absolute; bottom: 0; width: 100%; opacity: 0.7; }
+  .hist-days { display: flex; gap: 3px; }
+  .hist-day-label { flex: 1; text-align: center; font-size: 0.65rem; color: var(--muted); font-family: var(--mono); }
+  .hist-meta { display: flex; gap: 14px; margin-top: 8px; }
+  .hist-meta span { font-size: 0.72rem; color: var(--muted); }
+  .hist-meta strong { color: var(--text); }
+
+  /* Channel breakdown mini in history */
+  .hist-channels { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .ch-chip {
+    font-size: 0.68rem; font-family: var(--mono);
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 3px; padding: 2px 7px; color: var(--muted);
+  }
+  .ch-chip.has-val { color: var(--text); background: white; }
+
+  /* Apply date picker in scan */
+  .apply-date-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0.7rem 1.25rem; border-top: 1px solid var(--border);
+    font-size: 0.82rem; color: var(--muted);
+  }
+  .apply-date-row label { white-space: nowrap; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 1.5rem; right: 1.5rem;
+    background: var(--text); color: white; font-size: 0.83rem;
+    padding: 10px 18px; border-radius: var(--radius-sm);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    font-family: var(--sans); z-index: 999;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">Daily Sales Tracker</div>
+        <div class="brand-sub">Weekly revenue dashboard</div>
+      </div>
+    </div>
+    <div class="today-chip" id="today-chip"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('weekly')">Weekly Report</button>
+    <button class="tab" onclick="showTab('scanner')">Scan Receipt</button>
+    <button class="tab" onclick="showTab('history')">History</button>
+  </div>
+
+  <!-- WEEKLY -->
+  <div id="weekly" class="section active">
+    <div class="controls">
+      <div class="week-nav">
+        <button class="nav-btn" onclick="changeWeek(-1)">&#8249;</button>
+        <span class="week-label" id="week-label"></span>
+        <button class="nav-btn" onclick="changeWeek(1)">&#8250;</button>
+      </div>
+      <input type="date" class="ctrl-input" id="jump-date" onchange="jumpTo(this.value)" title="Jump to date" />
+      <button class="btn-save" id="save-btn" onclick="saveWeek()">Save</button>
+    </div>
+
+    <div class="metrics" id="metrics"></div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left;">Day</th>
+            <th>Cash</th>
+            <th>Card</th>
+            <th>Web Sales</th>
+            <th>Just Eat</th>
+            <th>Uber Eats</th>
+            <th>Deliveroo</th>
+            <th>Foodhub</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+        <tfoot id="tfoot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- SCANNER -->
+  <div id="scanner" class="section">
+    <div class="scan-zone" onclick="document.getElementById('file-inp').click()">
+      <div class="scan-icon">&#128247;</div>
+      <h3>Upload Receipt Image</h3>
+      <p>Uses OCR to extract text directly from your receipt image — no internet required</p>
+      <input type="file" id="file-inp" accept="image/*" onchange="startOCR(this)" />
+    </div>
+    <div id="scan-out"></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div id="history" class="section">
+    <div id="hist-list"></div>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const CATS = ['Cash','Card','Web Sales','Just Eat','Uber Eats','Deliveroo','Foodhub'];
+const CAT_KEYS = ['cash','card','web','justeat','ubereats','deliveroo','foodhub'];
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const STORAGE_KEY = 'dst_v1';
+
+let currentMon = getMonday(new Date());
+let db = loadDB();
+
+function loadDB() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch(e) { return {}; }
+}
+function saveDB() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); } catch(e) {}
+}
+
+function getMonday(d) {
+  const dt = new Date(d);
+  const day = dt.getDay();
+  const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
+  dt.setDate(diff); dt.setHours(0,0,0,0); return dt;
+}
+function dateStr(d) { return d.toISOString().split('T')[0]; }
+function isToday(d) { return dateStr(d) === dateStr(new Date()); }
+function weekDates(mon) {
+  return DAYS.map((_,i) => { const d = new Date(mon); d.setDate(d.getDate()+i); return d; });
+}
+function fmtShort(d) { return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
+function fmtWeek(mon) {
+  const end = new Date(mon); end.setDate(end.getDate()+6);
+  return fmtShort(mon) + ' — ' + fmtShort(end) + ' ' + end.getFullYear();
+}
+function weekKey(mon) { return dateStr(mon); }
+
+function getCell(wk, dk, ki) { return db[wk]?.[dk]?.[ki] ?? ''; }
+function setCell(wk, dk, ki, val) {
+  if (!db[wk]) db[wk] = {};
+  if (!db[wk][dk]) db[wk][dk] = {};
+  const n = parseFloat(val);
+  if (isNaN(n) || val === '') delete db[wk][dk][ki];
+  else db[wk][dk][ki] = n;
+}
+
+function renderWeek() {
+  const wk = weekKey(currentMon);
+  document.getElementById('week-label').textContent = fmtWeek(currentMon);
+  const dates = weekDates(currentMon);
+  const colTotals = new Array(CATS.length).fill(0);
+  let grand = 0;
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+  dates.forEach((date, di) => {
+    const dk = dateStr(date);
+    let rowTot = 0;
+    const tr = document.createElement('tr');
+    if (isToday(date)) tr.className = 'today-row';
+
+    const tdDay = document.createElement('td');
+    tdDay.className = 'day-col';
+    tdDay.innerHTML = `<div class="day-name">${DAYS[di]}${isToday(date)?'<span class="today-tag">today</span>':''}</div><div class="day-date">${fmtShort(date)}</div>`;
+    tr.appendChild(tdDay);
+
+    CAT_KEYS.forEach((ki, ci) => {
+      const v = getCell(wk, dk, ki);
+      if (v !== '') { rowTot += parseFloat(v)||0; colTotals[ci] += parseFloat(v)||0; }
+      const td = document.createElement('td');
+      td.style.textAlign = 'right';
+      const inp = document.createElement('input');
+      inp.className = 'cell-input'; inp.type = 'number'; inp.min = '0'; inp.step = '0.01';
+      inp.placeholder = '—'; inp.value = v; inp.dataset.day = dk; inp.dataset.ki = ki;
+      inp.oninput = function() { liveRowTotal(dk); };
+      td.appendChild(inp); tr.appendChild(td);
+    });
+
+    grand += rowTot;
+    const tdT = document.createElement('td');
+    tdT.className = 'row-total'; tdT.id = 'rt_'+dk;
+    tdT.textContent = rowTot > 0 ? '£'+rowTot.toFixed(2) : '—';
+    tr.appendChild(tdT);
+    tbody.appendChild(tr);
+  });
+
+  // Footer
+  const tfoot = document.getElementById('tfoot');
+  tfoot.innerHTML = '';
+  const tr = document.createElement('tr');
+  const tdL = document.createElement('td');
+  tdL.textContent = 'Column total'; tr.appendChild(tdL);
+  colTotals.forEach(v => {
+    const td = document.createElement('td');
+    td.textContent = v > 0 ? '£'+v.toFixed(2) : '—';
+    tr.appendChild(td);
+  });
+  const tdG = document.createElement('td'); tdG.className = 'grand-total';
+  tdG.textContent = grand > 0 ? '£'+grand.toFixed(2) : '—';
+  tr.appendChild(tdG); tfoot.appendChild(tr);
+
+  renderMetrics(colTotals, grand);
+}
+
+function liveRowTotal(dk) {
+  let t = 0;
+  document.querySelectorAll(`.cell-input[data-day="${dk}"]`).forEach(i => t += parseFloat(i.value)||0);
+  const el = document.getElementById('rt_'+dk);
+  if (el) el.textContent = t > 0 ? '£'+t.toFixed(2) : '—';
+}
+
+function renderMetrics(colTotals, grand) {
+  const grid = document.getElementById('metrics');
+  const items = [['Total', grand, true], ...CATS.map((c,i) => [c, colTotals[i], false])];
+  grid.innerHTML = items.map(([l,v,a]) =>
+    `<div class="metric${a?' accent-metric':''}"><div class="metric-label">${l}</div><div class="metric-val">${v>0?'£'+v.toFixed(2):'—'}</div></div>`
+  ).join('');
+}
+
+function saveWeek() {
+  const wk = weekKey(currentMon);
+  document.querySelectorAll('.cell-input').forEach(inp => {
+    setCell(wk, inp.dataset.day, inp.dataset.ki, inp.value.trim());
+  });
+  // Clean empty day entries
+  if (db[wk]) {
+    Object.keys(db[wk]).forEach(dk => {
+      if (Object.keys(db[wk][dk]).length === 0) delete db[wk][dk];
+    });
+    if (Object.keys(db[wk]).length === 0) delete db[wk];
+  }
+  saveDB();
+  const btn = document.getElementById('save-btn');
+  btn.textContent = 'Saved ✓'; btn.classList.add('save-ok');
+  setTimeout(() => { btn.textContent = 'Save'; btn.classList.remove('save-ok'); }, 1800);
+  showToast('Week saved successfully');
+}
+
+function changeWeek(dir) {
+  currentMon = new Date(currentMon);
+  currentMon.setDate(currentMon.getDate() + dir*7);
+  renderWeek();
+}
+function jumpTo(v) {
+  if (!v) return;
+  currentMon = getMonday(new Date(v));
+  renderWeek();
+}
+
+function showTab(t) {
+  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', ['weekly','scanner','history'][i]===t));
+  document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+  document.getElementById(t).classList.add('active');
+  if (t === 'history') renderHistory();
+}
+
+// ---- OCR SCANNER ----
+function startOCR(input) {
+  const file = input.files[0]; if (!file) return;
+  const out = document.getElementById('scan-out');
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const imgSrc = e.target.result;
+    out.innerHTML = `
+      <img src="${imgSrc}" class="scan-preview" />
+      <div class="ocr-progress">
+        <div style="font-weight:500;font-size:0.88rem;margin-bottom:6px;">Reading receipt...</div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" id="prog-bar"></div></div>
+        <div class="progress-label" id="prog-label">Initialising OCR engine...</div>
+      </div>`;
+
+    try {
+      const result = await Tesseract.recognize(imgSrc, 'eng', {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            const pct = Math.round(m.progress * 100);
+            const bar = document.getElementById('prog-bar');
+            const lbl = document.getElementById('prog-label');
+            if (bar) bar.style.width = pct + '%';
+            if (lbl) lbl.textContent = `Recognising text... ${pct}%`;
+          }
+        }
+      });
+
+      const rawText = result.data.text;
+      const parsed = parseReceiptText(rawText);
+      showScanResult(imgSrc, rawText, parsed);
+    } catch(err) {
+      out.innerHTML = `<div style="padding:1rem;color:#c0392b;font-size:0.85rem;">OCR failed: ${err.message}. Please try a clearer image.</div>`;
+    }
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function parseReceiptText(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const result = {};
+  const catMap = {
+    cash: ['cash sale', 'cash'],
+    card: ['card sale', 'card'],
+    web: ['web sale', 'web'],
+    justeat: ['just eat', 'justeat', 'just-eat'],
+    ubereats: ['uber eat', 'ubereats', 'uber-eat'],
+    deliveroo: ['deliveroo'],
+    foodhub: ['foodhub', 'food hub']
+  };
+  const extras = { total: ['total'], expenses: ['expense'], till_left: ['till left', 'till'] };
+
+  const extractMoney = str => {
+    const m = str.match(/[£$]?\s*(\d[\d,]*\.?\d{0,2})/);
+    if (m) return parseFloat(m[1].replace(',',''));
+    return null;
+  };
+
+  lines.forEach(line => {
+    const lower = line.toLowerCase();
+    for (const [ki, aliases] of Object.entries(catMap)) {
+      if (aliases.some(a => lower.includes(a))) {
+        const v = extractMoney(line);
+        if (v !== null && !result[ki]) result[ki] = v;
+      }
+    }
+    for (const [ki, aliases] of Object.entries(extras)) {
+      if (aliases.some(a => lower.includes(a)) && lower.indexOf('total') === lower.lastIndexOf('total') || ki !== 'total') {
+        const v = extractMoney(line);
+        if (v !== null && !result[ki]) result[ki] = v;
+      }
+    }
+  });
+
+  // Try to find date
+  const dateMatch = text.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+  if (dateMatch) result.date = dateMatch[0];
+
+  return result;
+}
+
+function showScanResult(imgSrc, rawText, parsed) {
+  const catLabels = {cash:'Cash',card:'Card',web:'Web Sales',justeat:'Just Eat',ubereats:'Uber Eats',deliveroo:'Deliveroo',foodhub:'Foodhub'};
+  const extraLabels = {total:'Total',expenses:'Expenses',till_left:'Till Left'};
+
+  const rows = Object.entries(catLabels).map(([k,label]) => {
+    const v = parsed[k] != null ? parsed[k].toFixed(2) : '';
+    return `<div class="scan-row-item">
+      <span class="scan-row-label">${label}</span>
+      <input class="scan-row-edit" type="number" min="0" step="0.01" id="se_${k}" value="${v}" placeholder="—" />
+    </div>`;
+  }).join('');
+
+  const extraRows = Object.entries(extraLabels).map(([k,label]) => {
+    if (parsed[k] == null) return '';
+    const cls = k === 'total' ? ' scan-total-row' : '';
+    return `<div class="scan-row-item${cls}">
+      <span class="scan-row-label">${label}</span>
+      <span class="scan-row-val">£${parsed[k].toFixed(2)}</span>
+    </div>`;
+  }).join('');
+
+  const today = dateStr(new Date());
+
+  document.getElementById('scan-out').innerHTML = `
+    <img src="${imgSrc}" class="scan-preview" />
+    <div class="scan-result">
+      <div class="scan-result-head">Extracted Sales Data ${parsed.date ? `<span style="font-weight:400;color:var(--muted);font-size:0.78rem;">&nbsp;·&nbsp;${parsed.date}</span>` : ''}</div>
+      ${rows}
+      ${extraRows}
+      <div class="apply-date-row">
+        <label>Apply to date:</label>
+        <input type="date" class="ctrl-input" id="apply-date" value="${today}" />
+      </div>
+      <div class="scan-actions">
+        <button class="btn-apply" onclick="applyToTracker()">Apply to Tracker</button>
+        <button class="btn-clear" onclick="document.getElementById('scan-out').innerHTML=''">Clear</button>
+      </div>
+    </div>
+    <span class="raw-text-toggle" onclick="toggleRaw(this)">Show raw OCR text</span>
+    <pre class="raw-text" id="raw-text-block">${escHtml(rawText)}</pre>`;
+}
+
+function toggleRaw(el) {
+  const block = document.getElementById('raw-text-block');
+  const show = block.style.display !== 'block';
+  block.style.display = show ? 'block' : 'none';
+  el.textContent = show ? 'Hide raw OCR text' : 'Show raw OCR text';
+}
+
+function applyToTracker() {
+  const catKeys = ['cash','card','web','justeat','ubereats','deliveroo','foodhub'];
+  const dateVal = document.getElementById('apply-date').value;
+  if (!dateVal) { showToast('Please select a date'); return; }
+
+  const applyDate = new Date(dateVal);
+  const mon = getMonday(applyDate);
+  const wk = weekKey(mon);
+  const dk = dateVal;
+
+  catKeys.forEach(ki => {
+    const inp = document.getElementById('se_'+ki);
+    if (inp && inp.value.trim() !== '') setCell(wk, dk, ki, inp.value);
+  });
+  saveDB();
+
+  currentMon = mon;
+  showTab('weekly');
+  renderWeek();
+  showToast('Data applied to ' + new Date(dateVal).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}));
+}
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ---- HISTORY ----
+function renderHistory() {
+  const list = document.getElementById('hist-list');
+  const keys = Object.keys(db).sort().reverse();
+  if (!keys.length) {
+    list.innerHTML = '<div class="history-empty">No saved data yet.<br>Add figures in the Weekly Report tab and save.</div>';
+    return;
+  }
+
+  list.innerHTML = keys.map(wk => {
+    const mon = new Date(wk);
+    const end = new Date(mon); end.setDate(end.getDate()+6);
+    const dates = weekDates(mon);
+    let grand = 0; const dailies = [];
+    const colTotals = new Array(CATS.length).fill(0);
+
+    dates.forEach(d => {
+      const dk = dateStr(d); let dt = 0;
+      CAT_KEYS.forEach((ki,ci) => { const v = db[wk]?.[dk]?.[ki]||0; dt+=v; colTotals[ci]+=v; });
+      dailies.push(dt); grand+=dt;
+    });
+
+    const maxD = Math.max(...dailies, 1);
+    const bars = dailies.map((v,i) =>
+      `<div class="hist-bar" title="${DAYS[i]}: £${v.toFixed(2)}">
+        <div class="hist-bar-fill" style="height:${Math.round(v/maxD*100)}%"></div>
+      </div>`
+    ).join('');
+    const dayLabels = DAYS.map(d=>`<div class="hist-day-label">${d}</div>`).join('');
+    const bestIdx = dailies.indexOf(Math.max(...dailies));
+    const daysWithData = dailies.filter(v=>v>0).length;
+
+    const chips = CATS.map((c,i) =>
+      `<span class="ch-chip${colTotals[i]>0?' has-val':''}">${c}: ${colTotals[i]>0?'£'+colTotals[i].toFixed(2):'—'}</span>`
+    ).join('');
+
+    return `<div class="hist-card" onclick="goToWeek('${wk}')">
+      <div class="hist-top">
+        <span class="hist-week">${fmtShort(mon)} — ${fmtShort(end)} ${end.getFullYear()}</span>
+        <span class="hist-total">£${grand.toFixed(2)}</span>
+      </div>
+      <div class="hist-bars">${bars}</div>
+      <div class="hist-days">${dayLabels}</div>
+      <div class="hist-meta">
+        <span><strong>${daysWithData}</strong> days recorded</span>
+        ${bestIdx>=0 && dailies[bestIdx]>0 ? `<span>Best: <strong>${DAYS[bestIdx]}</strong> (£${dailies[bestIdx].toFixed(2)})</span>` : ''}
+      </div>
+      <div class="hist-channels">${chips}</div>
+    </div>`;
+  }).join('');
+}
+
+function goToWeek(wk) {
+  currentMon = new Date(wk);
+  showTab('weekly');
+  renderWeek();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// INIT
+document.getElementById('today-chip').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+renderWeek();
+</script>
+</body>
+</html>
